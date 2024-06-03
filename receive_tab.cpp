@@ -9,10 +9,11 @@ receive_tab::receive_tab(QWidget *parent)
 
 receive_tab::receive_tab(QWidget *parent, my_server *server):receive_tab(parent)
 {
+    qDebug()<<"receive tab"<<QThread::currentThread();
     this->m_worker=new sworker(server);
     m_socket_thread=new QThread();
     this->m_worker->moveToThread(m_socket_thread);
-    connect(this,&receive_tab::server_quit,this->m_worker,&sworker::quit);
+    connect(m_socket_thread,&QThread::finished,this->m_worker,&sworker::quit);
     this->ui->clients_list->setRowCount(0);
     this->ui->clients_list->setHorizontalHeaderLabels(QStringList({"host","filename","size"}));
     this->ui->clients_list->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
@@ -35,22 +36,25 @@ sworker *receive_tab::worker()
 
 sworker::sworker(my_server *server):socket(server)
 {
-    server->setParent(this);
+    socket->setParent(this);
     connect(server,&my_server::need_connection,this,[this](qintptr socketDescriptor)->void{
         connection* client = new connection(nullptr,socketDescriptor);
-        QThread *thread=new QThread(this);
+        QThread *thread=new QThread();
         client->moveToThread(thread);
-        connect(this,&sworker::connections_quit,client,&connection::quit);
         connect(this,&sworker::connection_init,client,&connection::init);
+        connect(thread,&QThread::finished,client,&QObject::deleteLater);
         thread->start();
         emit connection_init();
         disconnect(this,&sworker::connection_init,client,&connection::init);
-        connect(client,&connection::connection_ready,this,[this,client](QString host,QString file_name,QString file_size)->void{
-            this->connections[host]=client;
+        connect(client,&connection::connection_ready,this,[this,client,thread](QString host,QString file_name,QString file_size)->void{
+            this->connections[host]=QPair<connection*,QThread*>(client,thread);
             emit client_query(host,file_name,file_size);
         });
-        connect(client,&connection::quitted,this,[this](QString host)->void{
-            this->connections.remove(host);
+        connect(client,&connection::disconnected,this,[this](QString host)->void{
+            auto connection_info=this->connections.take(host);
+            connection_info.second->quit();
+            connection_info.second->wait();
+            delete connection_info.second;
         });
     });
 }
@@ -58,15 +62,14 @@ sworker::sworker(my_server *server):socket(server)
 
 void sworker::accept(QString host,QString file_path,qint64 size)
 {
-    this->connections[host]->file_path=file_path;
-    this->connections[host]->size=size;
-    connect(this,&sworker::connection_accept,connections[host],&connection::accept);
+    this->connections[host].first->file_path=file_path;
+    this->connections[host].first->size=size;
+    connect(this,&sworker::connection_accept,connections[host].first,&connection::accept);
     emit connection_accept();
 }
 
 receive_tab::~receive_tab()
 {
-    emit server_quit();
     this->m_socket_thread->quit();
     this->m_socket_thread->wait();
     delete m_socket_thread;
@@ -75,15 +78,20 @@ receive_tab::~receive_tab()
 
 void sworker::quit()
 {
-    emit connections_quit();
-    this->socket->close();
+    qDebug()<<"worker"<<QThread::currentThread();
+    while(!connections.empty())
+    {
+        auto connection_info=connections.take(connections.begin().key());
+        connection_info.second->quit();
+        connection_info.second->wait();
+        delete connection_info.second;
+    }
     delete this;
 }
 
 sworker::~sworker()
 {
-    emit quitted();
-    //
+    ;
 }
 
 connection::connection(QObject *parent,qintptr socketDescriptor):QObject(parent),socketDescriptor(socketDescriptor) {};
@@ -94,7 +102,9 @@ void connection::init()
 {
     this->socket=new QTcpSocket(this);
     socket->setSocketDescriptor(socketDescriptor);
-    connect(socket,&QTcpSocket::disconnected,this,&connection::quit);
+    connect(socket,&QTcpSocket::disconnected,this,[this]()->void{
+        emit disconnected(host);
+    });
     host=socket->peerAddress().toString();
     host.append(':');
     host+=QString::number(socket->peerPort());
@@ -131,21 +141,21 @@ void connection::receive()
     file.close();
 }
 
-void connection::quit()
-{
-    emit quitted(host);
-    delete this;
-}
 
 connection::~connection()
 {
-    ;
+    socket->disconnect();
     //
 }
 
 
 
 my_server::my_server(QObject *parent):QTcpServer(parent) {}
+
+my_server::~my_server()
+{
+    ;
+}
 
 void my_server::incomingConnection(qintptr socketDescriptor)
 {
@@ -173,8 +183,10 @@ void receive_tab::on_disconnect_btn_clicked()
         return;
     }
     QString host=this->ui->clients_list->item(list[0].bottomRow(),list[0].leftColumn())->text();
-    connect(this,&receive_tab::disconnect_query,this->m_worker->connections[host],&connection::quit);
-    emit disconnect_query();
+    auto connection_info=this->m_worker->connections.take(host);
+    connection_info.second->quit();
+    connection_info.second->wait();
+    delete connection_info.second;
     this->ui->clients_list->removeRow(list[0].bottomRow());
 }
 
