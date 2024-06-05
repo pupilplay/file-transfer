@@ -31,10 +31,11 @@ signals:
     void connection_ready(QString host,QString file_name,QString size);
     void connected(QString host);
     void disconnected(QString host);
+    void quitted(QString host);
 private:
+    void prepare();
     QTcpSocket* socket;
     qintptr socketDescriptor;
-    QEventLoop loop;
     QString host;
     QString file_path;
     qint64 size;
@@ -63,8 +64,7 @@ signals:
     void client_query(QString host,QString file_name,QString size);
     void connection_accept();
     void connection_init();
-    void connection_quit();
-    void connections_quit();
+    void connection_quitted(QString host);
     void quitted();
 public slots:
     void accept(QString host,QString file_path,qint64 size);
@@ -72,7 +72,6 @@ public slots:
 private:
     my_server* socket;
     QHash<QString,QPair<connection*,QThread*>>connections;
-    QEventLoop loop;
 };
 
 class receive_tab : public socket_tab
@@ -95,7 +94,6 @@ private slots:
 private:
     Ui::receive_tab *ui;
     sworker* m_worker;
-    QEventLoop loop;
 };
 
 #endif // RECEIVE_TAB_H

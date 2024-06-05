@@ -11,6 +11,7 @@
 #include<QFileInfo>
 #include<QEventLoop>
 #include<QMessageBox>
+#include<QIntValidator>
 #include"file_info.h"
 #include"send_blocker.h"
 
@@ -30,6 +31,7 @@ public slots:
     void init(QString path);
     void quit();
     void send();
+    void set_interval(unsigned long interval);
 signals:
     void send_started();
     void send_finished();
@@ -41,6 +43,7 @@ private:
     QEventLoop loop;
     QFile file;
     file_info finfo;
+    unsigned long interval=500;
 };
 
 class send_tab : public socket_tab
@@ -55,11 +58,14 @@ public:
 signals:
     void send_start(QString path);
     void socket_init(QString ip,QString port);
+    void interval_changed(unsigned long interval);
 public slots:
     void abandon();
 private slots:
     void on_select_btn_clicked();
     void on_send_btn_clicked();
+
+    void on_interval_input_textEdited(const QString &arg1);
 
 private:
     Ui::send_tab *ui;

@@ -13,14 +13,17 @@ send_tab::send_tab(QWidget *parent, QString ip, QString port):send_tab(parent)
     m_worker=new cworker();
     m_socket_thread=new QThread();
     m_worker->moveToThread(m_socket_thread);
+    this->ui->interval_input->setValidator(new QIntValidator(0,ULONG_MAX,this->ui->interval_input));
     connect(m_socket_thread,&QThread::finished,m_worker,&QObject::deleteLater);
     connect(this,&send_tab::send_start,m_worker,&cworker::init);
-    //connect(socket,&QTcpSocket::disconnected,this,&send_tab::abandon);
     connect(this->m_worker,&cworker::send_started,this,[this]()->void{
         this->ui->info->setText("transferring");
     });
     connect(this->m_worker,&cworker::send_finished,this,[this]()->void{
         this->ui->info->setText("transfer finished");
+        this->ui->send_btn->setEnabled(true);
+        this->ui->select_btn->setEnabled(true);
+        this->ui->file_path->setEnabled(true);
     });
     connect(this,&send_tab::socket_init,m_worker,&cworker::connect_to_host);
     m_socket_thread->start();
@@ -40,7 +43,8 @@ send_tab::send_tab(QWidget *parent, QString ip, QString port):send_tab(parent)
     });
     emit socket_init(ip,port);
     blocker.exec();
-    //connect(m_worker,&cworker::disconnected,this,);
+    disconnect(m_worker,&cworker::error_occurred,this,nullptr);
+    connect(m_worker,&cworker::disconnected,this,&send_tab::abandon);
 }
 
 send_tab::~send_tab()
@@ -82,49 +86,40 @@ void cworker::init(QString path)
 }
 void cworker::send()
 {
+    emit send_started();
+    this->socket->disconnect(SIGNAL(readyRead()));
     file.open(QIODevice::ReadOnly);
     this->socket->readAll();
     char buf[1024];
     qint64 size = this->finfo.file_size;
     while(size>0)
     {
-        QThread::msleep(500);
         int ret=file.read(buf,1024);
         if(ret==-1)
         {
             break;
         }
         int sent = this->socket->write(buf,ret);
-        qDebug()<<"sender sent"<<sent;
-        if(sent==-1 || sent ==0)
+        if(!socket->waitForReadyRead())
+        {
+            break;
+        }
+        QByteArray reply = socket->read(16);
+        if(sent==-1)
         {
             file.close();
-            //unconfirmed
-            this->quit();
             return;
-            //unconfirmed
-        }
-        if(sent!=ret)
-        {
-            QThread::sleep(1);
-            while(sent<ret)
-            {
-                int ret2=this->socket->write(buf+sent,ret-sent);
-                qDebug()<<"sender sent"<<ret2;
-                if(ret2==-1)
-                {
-                    file.close();
-                    //unconfirmed
-                    this->quit();
-                    return;
-                    //unconfirmed
-                }
-                sent+=ret2;
-            }
         }
         size-=sent;
+        QThread::msleep(500);
     }
     file.close();
+    emit send_finished();
+}
+
+void cworker::set_interval(unsigned long interval)
+{
+    this->interval=interval;
 }
 
 void cworker::quit()
@@ -145,7 +140,16 @@ void send_tab::on_select_btn_clicked()
 
 void send_tab::on_send_btn_clicked()
 {
+    this->ui->send_btn->setEnabled(false);
+    this->ui->select_btn->setEnabled(false);
+    this->ui->file_path->setEnabled(false);
     emit send_start(this->ui->file_path->text());
     this->ui->info->setText("waiting for the reply from server");
+}
+
+
+void send_tab::on_interval_input_textEdited(const QString &arg1)
+{
+    this->m_worker->set_interval(arg1.toULong());
 }
 
