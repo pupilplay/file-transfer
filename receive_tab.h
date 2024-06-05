@@ -20,6 +20,7 @@ class connection:public QObject
 {
     Q_OBJECT
     friend class sworker;
+    friend class receive_tab;
 public:
     connection(QObject* parent,qintptr socketDescriptor);
     ~connection();
@@ -39,6 +40,7 @@ private:
     QString host;
     QString file_path;
     qint64 size;
+    bool shutdown;
 };
 
 class my_server:public QTcpServer

@@ -25,6 +25,12 @@ send_tab::send_tab(QWidget *parent, QString ip, QString port):send_tab(parent)
         this->ui->select_btn->setEnabled(true);
         this->ui->file_path->setEnabled(true);
     });
+    connect(this->m_worker,&cworker::send_failed,this,[this]()->void{
+        this->ui->info->setText("transfer failed");
+        this->ui->send_btn->setEnabled(true);
+        this->ui->select_btn->setEnabled(true);
+        this->ui->file_path->setEnabled(true);
+    });
     connect(this,&send_tab::socket_init,m_worker,&cworker::connect_to_host);
     m_socket_thread->start();
     send_blocker blocker;
@@ -49,6 +55,7 @@ send_tab::send_tab(QWidget *parent, QString ip, QString port):send_tab(parent)
 
 send_tab::~send_tab()
 {
+    this->m_worker->shutdown=true;
     m_socket_thread->quit();
     m_socket_thread->wait();
     delete m_socket_thread;
@@ -61,7 +68,7 @@ void send_tab::abandon()
     this->setEnabled(false);
 }
 
-cworker::cworker()
+cworker::cworker():shutdown(false)
 {
     ;
 }
@@ -92,7 +99,7 @@ void cworker::send()
     this->socket->readAll();
     char buf[1024];
     qint64 size = this->finfo.file_size;
-    while(size>0)
+    while(!shutdown && size>0)
     {
         int ret=file.read(buf,1024);
         if(ret==-1)
@@ -111,10 +118,17 @@ void cworker::send()
             return;
         }
         size-=sent;
-        QThread::msleep(500);
+        QThread::msleep(this->interval);
     }
     file.close();
-    emit send_finished();
+    if(size==0)
+    {
+        emit send_finished();
+    }
+    else
+    {
+        emit send_failed();
+    }
 }
 
 void cworker::set_interval(unsigned long interval)

@@ -95,6 +95,7 @@ void sworker::quit()
     while(!connections.empty())
     {
         auto connection_info=connections.take(connections.begin().key());
+        connection_info.first->shutdown=true;
         connection_info.second->quit();
         connection_info.second->wait();
         delete connection_info.second;
@@ -107,7 +108,10 @@ sworker::~sworker()
     ;
 }
 
-connection::connection(QObject *parent,qintptr socketDescriptor):QObject(parent),socketDescriptor(socketDescriptor) {};
+connection::connection(QObject *parent,qintptr socketDescriptor):QObject(parent),socketDescriptor(socketDescriptor),shutdown(false)
+{
+    ;
+}
 
 
 
@@ -146,7 +150,7 @@ void connection::receive()
     QFile file(this->file_path);
     file.open(QIODevice::WriteOnly | QIODevice::Append);
     char buf[1024];
-    while(this->size>0)
+    while(!shutdown && this->size>0)
     {
         if(!socket->waitForReadyRead())
         {
@@ -210,6 +214,7 @@ void receive_tab::on_disconnect_btn_clicked()
     }
     QString host=this->ui->clients_list->item(list[0].bottomRow(),list[0].leftColumn())->text();
     auto connection_info=this->m_worker->connections.take(host);
+    connection_info.first->shutdown=true;
     connection_info.second->quit();
     connection_info.second->wait();
     delete connection_info.second;

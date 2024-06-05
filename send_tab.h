@@ -35,15 +35,16 @@ public slots:
 signals:
     void send_started();
     void send_finished();
+    void send_failed();
     void connected();
     void disconnected();
     void error_occurred(QTcpSocket::SocketError error);
 private:
     QTcpSocket* socket;
-    QEventLoop loop;
     QFile file;
     file_info finfo;
     unsigned long interval=500;
+    bool shutdown;
 };
 
 class send_tab : public socket_tab
@@ -70,7 +71,6 @@ private slots:
 private:
     Ui::send_tab *ui;
     cworker* m_worker;
-    QEventLoop loop;
 };
 
 
