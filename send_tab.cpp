@@ -13,7 +13,7 @@ send_tab::send_tab(QWidget *parent, QString ip, QString port):send_tab(parent)
     m_worker=new cworker();
     m_socket_thread=new QThread();
     m_worker->moveToThread(m_socket_thread);
-    this->ui->interval_input->setValidator(new QIntValidator(0,ULONG_MAX,this->ui->interval_input));
+    this->ui->interval_input->setValidator(new QIntValidator(0,INT_MAX,this->ui->interval_input));
     connect(m_socket_thread,&QThread::finished,m_worker,&QObject::deleteLater);
     connect(this,&send_tab::send_start,m_worker,&cworker::init);
     connect(this->m_worker,&cworker::send_started,this,[this]()->void{
