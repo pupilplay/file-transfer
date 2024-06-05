@@ -46,7 +46,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::send_dialog()
 {
-    send_init dia(nullptr);
+    /*send_init dia(nullptr);
     connect(&dia,&send_init::connect_query,this,[&dia,this](QString ip,QString port)->void{
         dia.close();
         send_blocker blocker(nullptr);
@@ -72,6 +72,15 @@ void MainWindow::send_dialog()
         socket->connectToHost(QHostAddress(ip),port.toUShort());
         blocker.exec();
     });
+    dia.exec();*/
+    send_init dia(nullptr);
+    connect(&dia,&send_init::connect_query,this,[&dia,this](QString ip,QString port)->void{
+        QString label=ip;
+        label.append(':');
+        label+=port;
+        dia.close();
+        this->tabs->addTab(new send_tab(this->tabs,ip,port),label);
+    });
     dia.exec();
 }
 
@@ -85,13 +94,14 @@ void MainWindow::receive_dialog()
         {
             QString label="listening:";
             label+=port;
+            dia.close();
             this->tabs->addTab(new receive_tab(this->tabs,server),label);
         }
         else
         {
             QMessageBox::warning(this,"error","Failed to initialize a listening socket");
+            dia.close();
         }
-        dia.close();
     });
     dia.exec();
 }

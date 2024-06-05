@@ -29,6 +29,7 @@ public slots:
     void receive();
 signals:
     void connection_ready(QString host,QString file_name,QString size);
+    void connected(QString host);
     void disconnected(QString host);
 private:
     QTcpSocket* socket;

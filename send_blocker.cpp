@@ -16,3 +16,9 @@ send_blocker::~send_blocker()
 }
 
 
+
+void send_blocker::on_cancel_btn_clicked()
+{
+    emit disconnect_query();
+}
+

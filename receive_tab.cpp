@@ -9,7 +9,6 @@ receive_tab::receive_tab(QWidget *parent)
 
 receive_tab::receive_tab(QWidget *parent, my_server *server):receive_tab(parent)
 {
-    qDebug()<<"receive tab"<<QThread::currentThread();
     this->m_worker=new sworker(server);
     m_socket_thread=new QThread();
     this->m_worker->moveToThread(m_socket_thread);
@@ -43,12 +42,11 @@ sworker::sworker(my_server *server):socket(server)
         client->moveToThread(thread);
         connect(this,&sworker::connection_init,client,&connection::init);
         connect(thread,&QThread::finished,client,&QObject::deleteLater);
-        thread->start();
-        emit connection_init();
-        disconnect(this,&sworker::connection_init,client,&connection::init);
-        connect(client,&connection::connection_ready,this,[this,client,thread](QString host,QString file_name,QString file_size)->void{
+        connect(client,&connection::connected,this,[this,client,thread](QString host)->void{
             this->connections[host]=QPair<connection*,QThread*>(client,thread);
-            emit client_query(host,file_name,file_size);
+        });
+        connect(client,&connection::connection_ready,this,[this](QString host,QString file_name,QString size)->void{
+            emit client_query(host,file_name,size);
         });
         connect(client,&connection::disconnected,this,[this](QString host)->void{
             auto connection_info=this->connections.take(host);
@@ -56,6 +54,9 @@ sworker::sworker(my_server *server):socket(server)
             connection_info.second->wait();
             delete connection_info.second;
         });
+        thread->start();
+        emit connection_init();
+        disconnect(this,&sworker::connection_init,client,&connection::init);
     });
 }
 
@@ -78,7 +79,6 @@ receive_tab::~receive_tab()
 
 void sworker::quit()
 {
-    qDebug()<<"worker"<<QThread::currentThread();
     while(!connections.empty())
     {
         auto connection_info=connections.take(connections.begin().key());
@@ -108,6 +108,7 @@ void connection::init()
     host=socket->peerAddress().toString();
     host.append(':');
     host+=QString::number(socket->peerPort());
+    emit connected(host);
     connect(this->socket,&QTcpSocket::readyRead,this,[this]()->void{
         file_info finfo(socket->readAll());
         QString file_name=QString::fromUtf8(finfo.file_name);
@@ -130,6 +131,7 @@ void connection::receive()
     while(this->size>0)
     {
         int ret=this->socket->read(buf,1024);
+        qDebug()<<"receiver:"<<ret;
         if(ret==-1)
         {
             file.close();

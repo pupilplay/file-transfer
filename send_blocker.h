@@ -15,7 +15,10 @@ public:
     explicit send_blocker(QWidget *parent = nullptr);
     ~send_blocker();
 signals:
-    void disconnect();
+    void disconnect_query();
+
+private slots:
+    void on_cancel_btn_clicked();
 
 private:
     Ui::send_blocker *ui;

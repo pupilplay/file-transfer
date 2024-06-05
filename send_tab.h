@@ -10,7 +10,9 @@
 #include<QFile>
 #include<QFileInfo>
 #include<QEventLoop>
+#include<QMessageBox>
 #include"file_info.h"
+#include"send_blocker.h"
 
 namespace Ui {
 class send_tab;
@@ -19,16 +21,21 @@ class send_tab;
 class cworker:public QObject
 {
     Q_OBJECT
+    friend class send_tab;
 public:
-    cworker(QTcpSocket* socket);
+    cworker();
     ~cworker();
 public slots:
+    void connect_to_host(QString ip,QString port);
     void init(QString path);
     void quit();
     void send();
 signals:
     void send_started();
     void send_finished();
+    void connected();
+    void disconnected();
+    void error_occurred(QTcpSocket::SocketError error);
 private:
     QTcpSocket* socket;
     QEventLoop loop;
@@ -42,12 +49,12 @@ class send_tab : public socket_tab
 
 public:
     explicit send_tab(QWidget *parent = nullptr);
-    explicit send_tab(QWidget *parent,QTcpSocket* socket);
+    explicit send_tab(QWidget *parent,QString ip,QString port);
     ~send_tab();
 
 signals:
     void send_start(QString path);
-    void client_quit();
+    void socket_init(QString ip,QString port);
 public slots:
     void abandon();
 private slots:
