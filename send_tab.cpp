@@ -13,9 +13,14 @@ send_tab::send_tab(QWidget *parent, QString ip, QString port):send_tab(parent)
     m_worker=new cworker();
     m_socket_thread=new QThread();
     m_worker->moveToThread(m_socket_thread);
+
     this->ui->interval_input->setValidator(new QIntValidator(0,INT_MAX,this->ui->interval_input));
+    this->ui->interval_input->setToolTip(
+"The interval between two data package sending\nIt is not recommended to set it too low as it may cause unexpected error during transmitting");
+
     connect(m_socket_thread,&QThread::finished,m_worker,&QObject::deleteLater);
     connect(this,&send_tab::send_start,m_worker,&cworker::init);
+
     connect(this->m_worker,&cworker::send_started,this,[this]()->void{
         this->ui->info->setText("transferring");
     });
@@ -31,8 +36,7 @@ send_tab::send_tab(QWidget *parent, QString ip, QString port):send_tab(parent)
         this->ui->select_btn->setEnabled(true);
         this->ui->file_path->setEnabled(true);
     });
-    connect(this,&send_tab::socket_init,m_worker,&cworker::connect_to_host);
-    m_socket_thread->start();
+
     send_blocker blocker;
     connect(&blocker,&send_blocker::disconnect_query,this,[this,&blocker]()->void{
         blocker.close();
@@ -47,8 +51,11 @@ send_tab::send_tab(QWidget *parent, QString ip, QString port):send_tab(parent)
         this->ui->info->setText("error code:" +QString::number(errno));
         QMessageBox::warning(this,"error","Failed to initialize a connection, error code:" +QString::number(errno));
     });
+    connect(this,&send_tab::socket_init,m_worker,&cworker::connect_to_host);
+    m_socket_thread->start();
     emit socket_init(ip,port);
     blocker.exec();
+
     disconnect(m_worker,&cworker::error_occurred,this,nullptr);
     connect(m_worker,&cworker::disconnected,this,&send_tab::abandon);
 }
@@ -111,6 +118,7 @@ void cworker::send()
         {
             break;
         }
+        //the reply from the server is not used
         QByteArray reply = socket->read(16);
         if(sent==-1)
         {
@@ -129,16 +137,6 @@ void cworker::send()
     {
         emit send_failed();
     }
-}
-
-void cworker::set_interval(unsigned long interval)
-{
-    this->interval=interval;
-}
-
-void cworker::quit()
-{
-    ;
 }
 
 cworker::~cworker()
@@ -164,6 +162,6 @@ void send_tab::on_send_btn_clicked()
 
 void send_tab::on_interval_input_textEdited(const QString &arg1)
 {
-    this->m_worker->set_interval(arg1.toULong());
+    this->m_worker->interval=arg1.toULong();
 }
 

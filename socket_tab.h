@@ -2,7 +2,7 @@
 #define SOCKET_TAB_H
 
 #include <QWidget>
-
+//This class was supposed to be a virtual class but has been given up as it does no help
 class socket_tab : public QWidget
 {
     Q_OBJECT

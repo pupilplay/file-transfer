@@ -12,65 +12,42 @@ receive_tab::receive_tab(QWidget *parent, my_server *server):receive_tab(parent)
     this->m_worker=new sworker(server);
     m_socket_thread=new QThread();
     this->m_worker->moveToThread(m_socket_thread);
-    connect(m_socket_thread,&QThread::finished,this->m_worker,&sworker::quit);
+    connect(m_socket_thread,&QThread::finished,this->m_worker,&QObject::deleteLater);
+
     this->ui->clients_list->setRowCount(0);
     this->ui->clients_list->setHorizontalHeaderLabels(QStringList({"host","filename","size"}));
     this->ui->clients_list->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    this->ui->transfer_list->setRowCount(0);
+    this->ui->transfer_list->setHorizontalHeaderLabels(QStringList({"host","filename","size"}));
+    this->ui->transfer_list->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+
     connect(this->m_worker,&sworker::client_query,this,[this](QString host,QString file_name,QString size)->void{
-        int row;
-        row=this->ui->clients_list->rowCount();
+        int row=this->ui->clients_list->rowCount();
         this->ui->clients_list->setRowCount(row+1);
         this->ui->clients_list->setItem(row,0,new QTableWidgetItem(host));
         this->ui->clients_list->setItem(row,1,new QTableWidgetItem(file_name));
         this->ui->clients_list->setItem(row,2,new QTableWidgetItem(size));
     });
-    connect(this->m_worker,&sworker::connection_quitted,this,[this](QString host)->void{
-        for(int i=0;i<this->ui->clients_list->rowCount();i++)
+    connect(this->m_worker,&sworker::transfer_finished,this,[this](QString host)->void{
+        for(int i=0;i<this->ui->transfer_list->rowCount();i++)
         {
-            if(this->ui->clients_list->item(i,0)->text()==host)
+            if(this->ui->transfer_list->item(i,0)->text()==host)
             {
-                this->ui->clients_list->removeRow(i);
+                this->ui->transfer_list->removeRow(i);
                 break;
             }
         }
     });
+
     connect(this,&receive_tab::accept_query,this->m_worker,&sworker::accept);
     m_socket_thread->start();
 }
 
-sworker *receive_tab::worker()
-{
-    return this->m_worker;
-}
 
-
-sworker::sworker(my_server *server):socket(server)
+sworker::sworker(my_server *server):server(server)
 {
-    socket->setParent(this);
-    connect(server,&my_server::need_connection,this,[this](qintptr socketDescriptor)->void{
-        connection* client = new connection(nullptr,socketDescriptor);
-        QThread *thread=new QThread();
-        client->moveToThread(thread);
-        connect(this,&sworker::connection_init,client,&connection::init);
-        connect(thread,&QThread::finished,client,&QObject::deleteLater);
-        connect(client,&connection::connected,this,[this,client,thread](QString host)->void{
-            this->connections[host]=QPair<connection*,QThread*>(client,thread);
-        });
-        connect(client,&connection::connection_ready,this,[this,client](QString host,QString file_name,QString size)->void{
-            //disconnect the item in the client_list
-            emit client_query(host,file_name,size);
-        });
-        connect(client,&connection::disconnected,this,[this](QString host)->void{
-            auto connection_info=this->connections.take(host);
-            connection_info.second->quit();
-            connection_info.second->wait();
-            delete connection_info.second;
-        });
-        connect(client,&connection::quitted,this,&sworker::connection_quitted);
-        thread->start();
-        emit connection_init();
-        disconnect(this,&sworker::connection_init,client,&connection::init);
-    });
+    server->setParent(this);
+    connect(server,&my_server::need_connection,this,&sworker::connection_create);
 }
 
 
@@ -78,8 +55,34 @@ void sworker::accept(QString host,QString file_path,qint64 size)
 {
     this->connections[host].first->file_path=file_path;
     this->connections[host].first->size=size;
-    connect(this,&sworker::connection_accept,connections[host].first,&connection::accept);
+    QMetaObject::Connection&& id =connect(this,&sworker::connection_accept,connections[host].first,&connection::accept);
     emit connection_accept();
+    disconnect(id);
+}
+
+void sworker::connection_create(qintptr socketDescriptor)
+{
+    connection* client = new connection(nullptr,socketDescriptor);
+    QThread *thread=new QThread();
+    client->moveToThread(thread);
+    connect(thread,&QThread::finished,client,&QObject::deleteLater);
+
+    connect(client,&connection::connected,this,[this,client,thread](QString host)->void{
+        this->connections[host]=QPair<connection*,QThread*>(client,thread);
+    });
+    connect(client,&connection::connection_ready,this,&sworker::client_query);
+    connect(client,&connection::disconnected,this,[this](QString host)->void{
+        auto connection_info=this->connections.take(host);
+        connection_info.second->quit();
+        connection_info.second->wait();
+        delete connection_info.second;
+    });
+    connect(client,&connection::transfer_finished,this,&sworker::transfer_finished);
+
+    QMetaObject::Connection&& id=connect(this,&sworker::connection_init,client,&connection::init);
+    thread->start();
+    emit connection_init();
+    disconnect(id);
 }
 
 receive_tab::~receive_tab()
@@ -90,7 +93,7 @@ receive_tab::~receive_tab()
     delete ui;
 }
 
-void sworker::quit()
+sworker::~sworker()
 {
     while(!connections.empty())
     {
@@ -100,12 +103,6 @@ void sworker::quit()
         connection_info.second->wait();
         delete connection_info.second;
     }
-    delete this;
-}
-
-sworker::~sworker()
-{
-    ;
 }
 
 connection::connection(QObject *parent,qintptr socketDescriptor):QObject(parent),socketDescriptor(socketDescriptor),shutdown(false)
@@ -119,7 +116,6 @@ void connection::init()
 {
     this->socket=new QTcpSocket(this);
     socket->setSocketDescriptor(socketDescriptor);
-
     host=socket->peerAddress().toString();
     host.append(':');
     host+=QString::number(socket->peerPort());
@@ -167,14 +163,17 @@ void connection::receive()
         socket->write("recv");
     }
     file.close();
-    emit quitted(host);
-    prepare();
+    emit transfer_finished(host);
+    if(!shutdown)
+    {
+        prepare();
+    }
 }
 
 
 connection::~connection()
 {
-    emit quitted(host);
+    emit transfer_finished(host);
     socket->disconnect();
 }
 
@@ -194,25 +193,48 @@ void my_server::incomingConnection(qintptr socketDescriptor)
 
 void receive_tab::on_receive_btn_clicked()
 {
-    auto &&list = this->ui->clients_list->selectedItems();
+    auto &&list = this->ui->clients_list->selectedRanges();
     if(list.empty())
     {
         return;
     }
-    QString host=list[0]->text();
-    QString file_path=QFileDialog::getSaveFileName(nullptr,"save file",list[1]->text());
-    qint64 size=list[2]->text().toLongLong();
+    QString host=this->ui->clients_list->item(list[0].bottomRow(),0)->text();
+    QString file_path=QFileDialog::getSaveFileName(nullptr,"save file",this->ui->clients_list->item(list[0].bottomRow(),1)->text());
+    qint64 size=this->ui->clients_list->item(list[0].bottomRow(),2)->text().toLongLong();
     emit accept_query(host,file_path,size);
+    int row=this->ui->transfer_list->rowCount();
+    this->ui->transfer_list->setRowCount(row+1);
+    this->ui->transfer_list->setItem(row,0,new QTableWidgetItem(host));
+    this->ui->transfer_list->setItem(row,1,new QTableWidgetItem(file_path));
+    this->ui->transfer_list->setItem(row,2,new QTableWidgetItem(this->ui->clients_list->item(list[0].bottomRow(),2)->text()));
+    this->ui->clients_list->removeRow(list[0].bottomRow());
 }
 
 void receive_tab::on_disconnect_btn_clicked()
+{
+    auto &&list = this->ui->transfer_list->selectedRanges();
+    if(list.empty())
+    {
+        return;
+    }
+    QString host=this->ui->transfer_list->item(list[0].bottomRow(),0)->text();
+    auto connection_info=this->m_worker->connections.take(host);
+    connection_info.first->shutdown=true;
+    connection_info.second->quit();
+    connection_info.second->wait();
+    delete connection_info.second;
+}
+
+
+void receive_tab::on_reject_btn_clicked()
 {
     auto &&list = this->ui->clients_list->selectedRanges();
     if(list.empty())
     {
         return;
     }
-    QString host=this->ui->clients_list->item(list[0].bottomRow(),list[0].leftColumn())->text();
+    QString host=this->ui->clients_list->item(list[0].bottomRow(),0)->text();
+    this->ui->clients_list->removeRow(list[0].bottomRow());
     auto connection_info=this->m_worker->connections.take(host);
     connection_info.first->shutdown=true;
     connection_info.second->quit();

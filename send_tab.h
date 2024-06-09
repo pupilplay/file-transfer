@@ -7,9 +7,6 @@
 #include<QObject>
 #include"socket_tab.h"
 #include<QFileDialog>
-#include<QFile>
-#include<QFileInfo>
-#include<QEventLoop>
 #include<QMessageBox>
 #include<QIntValidator>
 #include"file_info.h"
@@ -22,23 +19,32 @@ class send_tab;
 class cworker:public QObject
 {
     Q_OBJECT
+    //for accessing the member variable shutdown and interval conveniently
     friend class send_tab;
 public:
     cworker();
     ~cworker();
 public slots:
+    //initialize the QTcpSocket
     void connect_to_host(QString ip,QString port);
+
+    //get the file info and send to the server
     void init(QString path);
-    void quit();
+
+    //transfer the data
     void send();
-    void set_interval(unsigned long interval);
 signals:
+
+    //emitted in function send() to notify the send_tab to update the information
     void send_started();
     void send_finished();
     void send_failed();
+
+    //pass the corresponding QTcpSocket signals
     void connected();
     void disconnected();
     void error_occurred(QTcpSocket::SocketError error);
+
 private:
     QTcpSocket* socket;
     QFile file;
@@ -57,15 +63,22 @@ public:
     ~send_tab();
 
 signals:
+    //used to make the cworker start transferring
     void send_start(QString path);
+
+    //work as a temporary signal to initialize the socket in another thread
     void socket_init(QString ip,QString port);
-    void interval_changed(unsigned long interval);
+
 public slots:
+
+    //disable the send_tab when the socket is disconnected
     void abandon();
+
 private slots:
     void on_select_btn_clicked();
     void on_send_btn_clicked();
 
+    //change the interval in cworker
     void on_interval_input_textEdited(const QString &arg1);
 
 private:

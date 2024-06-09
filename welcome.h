@@ -2,12 +2,11 @@
 #define WELCOME_H
 
 #include <QWidget>
-#include"socket_tab.h"
 namespace Ui {
 class welcome;
 }
 
-class welcome : public socket_tab
+class welcome : public QWidget
 {
     Q_OBJECT
 

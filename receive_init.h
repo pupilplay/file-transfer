@@ -18,6 +18,7 @@ public:
     ~receive_init();
 
 signals:
+    //emitted when listen button is clicked and pass the port to the server to be initialized
     void listen_query(QString port);
 private slots:
     void on_listen_btn_clicked();

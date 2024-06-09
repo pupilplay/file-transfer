@@ -25,6 +25,7 @@ private slots:
 
     void on_connect_btn_clicked();
 signals:
+    //emitted when connect button is clicked and pass the ip and the port to the socket to be initialized
     void connect_query(QString ip,QString port);
 private:
     Ui::send_init *ui;
