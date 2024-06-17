@@ -21,6 +21,7 @@ private slots:
 signals:
     void send_query();
     void receive_query();
+
 private:
     Ui::welcome *ui;
 };

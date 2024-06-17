@@ -2,8 +2,8 @@
 #define RECEIVE_INIT_H
 
 #include <QDialog>
-#include<QValidator>
-#include<QMessageBox>
+#include <QMessageBox>
+#include <QValidator>
 
 namespace Ui {
 class receive_init;

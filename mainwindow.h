@@ -2,7 +2,7 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include<QTabWidget>
+#include <QTabWidget>
 
 QT_BEGIN_NAMESPACE
 namespace Ui {

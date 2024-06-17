@@ -8,9 +8,10 @@ class socket_tab : public QWidget
     Q_OBJECT
 public:
     explicit socket_tab(QWidget *parent = nullptr);
-    QThread* socket_thread();
+    QThread *socket_thread();
+
 protected:
-    QThread* m_socket_thread;
+    QThread *m_socket_thread;
 };
 
 #endif // SOCKET_TAB_H

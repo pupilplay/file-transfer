@@ -2,15 +2,13 @@
 #define SEND_INIT_H
 
 #include <QDialog>
-#include<QValidator>
-#include<QHostAddress>
-#include<QMessageBox>
+#include <QHostAddress>
+#include <QMessageBox>
+#include <QValidator>
 
 namespace Ui {
 class send_init;
 }
-
-
 
 class send_init : public QDialog
 {
@@ -26,7 +24,8 @@ private slots:
     void on_connect_btn_clicked();
 signals:
     //emitted when connect button is clicked and pass the ip and the port to the socket to be initialized
-    void connect_query(QString ip,QString port);
+    void connect_query(QString ip, QString port);
+
 private:
     Ui::send_init *ui;
 };

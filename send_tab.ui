@@ -61,13 +61,23 @@
           </sizepolicy>
          </property>
          <property name="text">
-          <string>500</string>
+          <string>200</string>
          </property>
         </widget>
        </item>
       </layout>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QProgressBar" name="send_progress">
+     <property name="enabled">
+      <bool>true</bool>
+     </property>
+     <property name="value">
+      <number>0</number>
+     </property>
+    </widget>
    </item>
    <item>
     <widget class="QLabel" name="info">

@@ -15,10 +15,7 @@ send_blocker::~send_blocker()
     delete ui;
 }
 
-
-
 void send_blocker::on_cancel_btn_clicked()
 {
     emit disconnect_query();
 }
-

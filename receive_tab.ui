@@ -84,7 +84,7 @@
         <enum>QAbstractItemView::SelectRows</enum>
        </property>
        <property name="columnCount">
-        <number>3</number>
+        <number>4</number>
        </property>
        <attribute name="horizontalHeaderCascadingSectionResizes">
         <bool>false</bool>
@@ -104,6 +104,7 @@
        <column/>
        <column/>
        <column/>
+       <column/>
       </widget>
      </item>
      <item>
@@ -114,6 +115,9 @@
       </widget>
      </item>
     </layout>
+   </item>
+   <item>
+    <widget class="QListWidget" name="info_list"/>
    </item>
   </layout>
  </widget>
